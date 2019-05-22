@@ -1,28 +1,27 @@
 #include <boost/array.hpp>
 #include <boost/asio.hpp>
-#include <fstream> 
+#include <fstream>
 #include <iostream>
-#include <string> 
+#include <string>
 
-  
 using boost::asio::ip::tcp;
- 
+
 int main(int argc, char *argv[]) {
   try {
 
-    const char *port = "3632";           // the port we connect
+    const char *port = "3632";            // the port we connect
     const unsigned int buff_size = 65536; // the size of the read buffer
 
     if (argc != 3) {
       std::cerr << "Usage: file_client <host> <filename>" << std::endl;
       return 1;
-    } 
+    }
     boost::asio::io_service io_service;        // asio main object
     tcp::resolver resolver(io_service);        // a resolver for name to @
     tcp::resolver::query query(argv[1], port); // ask the dns for this resolver
     tcp::resolver::iterator endpoint_iterator = resolver.resolve(
         query); // iterator if multiple answers for a given name
-    tcp::resolver::iterator end; 
+    tcp::resolver::iterator end;
 
     tcp::socket socket(io_service); // attach a socket to the main asio object
     socket.connect(*endpoint_iterator); // connect to the first returned object
@@ -44,9 +43,9 @@ int main(int argc, char *argv[]) {
         break; // Connection closed cleanly by peer.
       } else if (error) {
         throw boost::system::system_error(error); // Some other error.
-      } else { 
+      } else {
         f.write(buf.data(), len); // write some data
-      } 
+      }
     }
   } catch (std::exception &e) {
     std::cout << "Exception: " << e.what() << std::endl;

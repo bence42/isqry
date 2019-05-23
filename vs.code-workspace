@@ -60,7 +60,9 @@
 			"typeindex": "cpp",
 			"typeinfo": "cpp",
 			"utility": "cpp",
-			"variant": "cpp"
+			"variant": "cpp",
+			"string": "cpp",
+			"*.ipp": "cpp"
 		},
 		"editor.suggest.localityBonus": true
 	}

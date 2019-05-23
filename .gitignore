@@ -4,3 +4,4 @@
 *.exe
 *.bak
 *.bin
+*.pch

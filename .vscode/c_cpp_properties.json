@@ -1,0 +1,21 @@
+{
+    "configurations": [
+        {
+            "name": "Win32",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "c:/llvm8/include/**",
+                "c:/llvm8/include/boost/*"
+            ],
+            "intelliSenseMode": "gcc-x64",
+            "defines": [
+                "_DEBUG",
+                "UNICODE",
+                "_UNICODE"
+            ],
+            "compilerPath": "C:\\llvm8\\bin\\clang++.exe",
+            "cppStandard": "c++17"
+        }
+    ],
+    "version": 4
+}

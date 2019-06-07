@@ -7,7 +7,7 @@
             "label": "build all",
             "type": "shell",
             "command": "make",
-            "args": ["all", "-j8"],
+            "args": ["${input:make_target}", "-j8"],
             "options": {
                 "env": {
                     //"PATH" : "${workspaceFolder}/mingw/bin"
@@ -28,16 +28,26 @@
             },
             "problemMatcher": {
                 "owner": "cpp",
-                "fileLocation": ["absolute"],
+                "fileLocation": ["relative", "${workspaceFolder}"],
                 "pattern": {
-                    "regexp": "^(.*):(\\d+):(\\d+):\\s+(warning|error):\\s+(.*)$",
-                    "file": 1,
-                    "line": 2,
-                    "column": 3,
-                    "severity": 4,
-                    "message": 5
+                    "regexp": "^(..\/)*(.*):(\\d+):(\\d+):\\s+(warning|error|note):\\s+(.*)$",
+                    "file": 2,
+                    "line": 3,
+                    "column": 4,
+                    "severity": 5,
+                    "message": 6
                 }
             }
+        }      
+
+    ],
+    "inputs": [
+        {
+            "type": "pickString",
+            "description": "chose a make target",
+            "id": "make_target",
+            "options": ["all", "clean"],
+            "default": "all"
         }
     ]
 }

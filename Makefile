@@ -4,15 +4,15 @@ CLXX := clang++
 CXX  := $(CLXX)
 
 ifeq ($(CXX),clang++)
-  MINGW_MODE := --target=x86_64-pc-windows-gnu  -fuse-ld=lld
+  MINGW_MODE := --target=x86_64-pc-mingw  -fuse-ld=lld
 endif
 
-CXXFLAGS   := -std=c++17 -O2 -g -Wall -Wextra -Werror
+CXXFLAGS   := -std=c++17 -O2 -g -Wall -Wextra #-Werror
 BOOSTLIBS  := -lboost_system-mt
 WINSOCKLIBS:= -lwsock32 -lws2_32
 
-HOST_LLVM := c:\llvm8
-BOOST     := $(HOST_LLVM)\include\boost
+HOST_LLVM := /c/llvm8
+BOOST     := $(HOST_LLVM)/include/boost
 
 
 

@@ -4,7 +4,7 @@
             "name": "Win32",
             "includePath": [
                 "${workspaceFolder}/**",
-                "c:\\llvm8\\include\\c++\\",
+                "c:\\llvm8\\include\\c++\\*",
                 "c:\\llvm8\\include\\c++\\x86_64-w64-mingw32\\*",
                 "c:\\llvm8\\include\\c++\\backward\\*",
                 "c:\\llvm8\\lib\\clang\\8.0.0\\include\\*",

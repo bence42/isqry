@@ -10,6 +10,7 @@ endif
 CXXFLAGS   := -std=c++17 -O2 -g -Wall -Wextra #-Werror
 BOOSTLIBS  := -lboost_system-mt
 WINSOCKLIBS:= -lwsock32 -lws2_32
+FILESYSTEMLIBS  := -lstdc++fs
 
 HOST_LLVM := /c/llvm8
 BOOST     := $(HOST_LLVM)/include/boost
@@ -23,7 +24,7 @@ clean:
 	rm -rf $(CURDIR)/*.pch
 
 %.exe: %.cpp asio.hpp.pch Makefile
-	$(CXX) $< -o $@ $(CXXFLAGS) -I$(BOOST) $(BOOSTLIBS) $(WINSOCKLIBS) $(MINGW_MODE) -include-pch asio.hpp.pch
+	$(CXX) $< -o $@ $(CXXFLAGS) -I$(BOOST) $(BOOSTLIBS) $(WINSOCKLIBS) $(FILESYSTEMLIBS) $(MINGW_MODE) -include-pch asio.hpp.pch
 
 
 asio.hpp.pch: $(BOOST)\asio.hpp Makefile

@@ -6,33 +6,71 @@
 
 using boost::asio::ip::tcp;
 
-int main(int argc, char *argv[]) {
+// protocol:
+// send : command
+// get: acknowledge
+// send : filename
+// get: acknowledge
+// send : file content
+
+int main() {
   try {
 
     const char *port = "3632";
-    const char *server = "10.76.153.34";
-
-    std::cout << "Usage: type text and press enter to send." << std::endl;
+    const char *server = "192.168.1.107";
 
     boost::asio::io_service io_service;
     tcp::resolver resolver(io_service);
     tcp::resolver::query(server, port);
     tcp::resolver::iterator endpoint =
         resolver.resolve(tcp::resolver::query(server, port));
-    tcp::resolver::iterator end;
 
-    for (;;) {
-      tcp::socket socket(io_service);
-      socket.connect(*endpoint);
-      auto max_length = 32656;
-      char msg[max_length];
-      std::cin.getline(msg, max_length);
-      size_t request_length = std::strlen(msg);
-      auto len = boost::asio::write(socket, boost::asio::buffer(msg, request_length));
-      std::cout << "Sent: '" << msg << "' " << len << std::endl;
+    tcp::socket socket(io_service);
+    socket.connect(*endpoint);
+    char acknowledge[3];
 
+    // send command
+    std::string cmd = "gcc -c data.cpp -o data.exe -I./sent/include";
+    cmd += "\n";
+    size_t request_length = cmd.size();
+    auto bytes_sent = boost::asio::write(
+        socket, boost::asio::buffer(cmd.c_str(), request_length));
+    cmd.pop_back();
+    std::cout << "> Sent cmd: '" << cmd << "' " << std::endl;
+    boost::asio::read(socket, boost::asio::buffer(acknowledge, 3));
+
+    // open file
+    std::string fileName = "test/to_send/data.cpp";
+    std::ifstream file(fileName, std::ios_base::in);
+    if (!file.is_open()) {
+      std::cerr << "> error: cant open file: " << fileName << std::endl;
+      socket.close();
+      exit(1);
     }
-  } catch (std::exception &e) { 
+
+    // send filename
+    fileName += "\n";
+    request_length = fileName.size();
+    bytes_sent = boost::asio::write(
+        socket, boost::asio::buffer(fileName, request_length));
+    fileName.pop_back();
+
+    std::cout << "> Sent filename: '" << fileName << "' " << std::endl;
+    boost::asio::read(socket, boost::asio::buffer(acknowledge, 3));
+
+    // send file content
+
+    while (!file.eof()) {
+      constexpr auto buff_size = 65536;
+      char buff[buff_size]{};
+
+      file.read(buff, buff_size);
+      size_t request_length = file.gcount();
+      auto bytes_sent =
+          boost::asio::write(socket, boost::asio::buffer(buff, request_length));
+    }
+    file.close();
+  } catch (std::exception &e) {
     std::cout << "Exception: " << e.what() << std::endl;
   }
 

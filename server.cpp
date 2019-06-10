@@ -100,7 +100,7 @@ void Session::get_command() {
   auto lifetime_mngr = shared_from_this();
   boost::asio::async_read_until(
       peer_, sbuff_, "\n",
-      [this, lifetime_mngr](const boost::system::error_code error,
+      [this, lifetime_mngr](const boost::system::error_code& error,
                             std::size_t bytes_transferred) {
         if (!error) {
           cmd_ = std::string{buffers_begin(sbuff_.data()),
@@ -120,7 +120,7 @@ void Session::get_filename() {
   auto lifetime_mngr = shared_from_this();
   boost::asio::async_read_until(
       peer_, sbuff_, "\n",
-      [this, lifetime_mngr](const boost::system::error_code error,
+      [this, lifetime_mngr](const boost::system::error_code& error,
                             std::size_t bytes_transferred) {
         if (!error) {
           inFileName_ =
@@ -164,7 +164,7 @@ void Session::get_fileContent() {
   auto lifetime_mngr = shared_from_this();
   peer_.async_read_some(
       boost::asio::buffer(fileChunk_),
-      [this, lifetime_mngr](const boost::system::error_code error,
+      [this, lifetime_mngr](const boost::system::error_code& error,
                             std::size_t bytes_transferred) {
         if (error == boost::asio::error::eof) {
           report("> get_fileContent: done");
@@ -196,7 +196,7 @@ class Server {
  private:
   void do_accept() {
     acceptor_.async_accept(
-        [this](boost::system::error_code ec, tcp::socket socket) {
+        [this](const boost::system::error_code& ec, tcp::socket socket) {
           if (!ec) {
             std::make_shared<Session>(std::move(socket))->start();
           }

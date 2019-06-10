@@ -26,19 +26,50 @@
                 "showReuseMessage": true,
                 "clear": true
             },
+            "problemMatcher": "$gcc"
+        },
+        {
+            "type": "shell",
+            "label": "clang tidy",
+            "command": "clang-tidy",
+            "args": [
+                "-checks=*,-fuchsia-default-arguments",
+                "-warnings-as-errors=*"
+                "${file}",
+                "--",
+                "--target=x86_64-pc-mingw",
+                "-std=c++17",
+                "-IC:/llvm8/include",
+            ],
+            "windows": {
+                "options": {
+                    "env": {
+                        "PATH" : "c:/llvm8/bin"
+                    }
+                }
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "panel": "new"
+            },
             "problemMatcher": {
                 "owner": "cpp",
-                "fileLocation": ["relative", "${workspaceFolder}"],
+                "fileLocation": ["abosulte"],
                 "pattern": {
-                    "regexp": "^(..\/)*(.*):(\\d+):(\\d+):\\s+(warning|error|note):\\s+(.*)$",
-                    "file": 2,
-                    "line": 3,
-                    "column": 4,
-                    "severity": 5,
-                    "message": 6
+                "regexp": "^(.*):(\\d+):(\\d+):\\s+(warning|error):\\s+(.*)$",
+                    "file": 1,
+                    "line": 2,
+                    "column": 3,
+                    "severity": 4,
+                    "message": 5
                 }
             }
-        }      
+        }
 
     ],
     "inputs": [

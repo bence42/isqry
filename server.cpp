@@ -11,31 +11,32 @@ using boost::asio::ip::tcp;
 
 class Session : public std::enable_shared_from_this<Session> {
 public:
-  explicit Session(tcp::socket&& peer)
+  explicit Session(tcp::socket &&peer)
       : peer_(std::move(peer)), port_(peer_.remote_endpoint().port()),
         address_(peer_.remote_endpoint().address()),
         start_time_(std::chrono::high_resolution_clock::now()) {
     report("> connected to :", address_, ":", port_);
   }
 
-  Session(const Session&) = delete;
-  Session(const Session&&) = delete;
+  Session(const Session &) = delete;
+  Session(const Session &&) = delete;
 
   ~Session() { report_end(); }
 
   void start();
 
 private:
-  //utils
+  // utils
   template <typename... Args> inline void report(Args &&... args);
-  void
-  print_time_from(const std::chrono::time_point<std::chrono::system_clock> &);
+  void print_time_from(
+      const std::chrono::time_point<std::chrono::system_clock> &start_time);
   // init
   void get_command();
-  void get_filename(const boost::system::error_code &);
+  void get_filename(const boost::system::error_code &error);
   std::string create_inFile_path();
-  void prepare_file(const boost::system::error_code &);
-  void get_fileContent(const boost::system::error_code &, std::size_t);
+  void prepare_file(const boost::system::error_code &error);
+  void get_fileContent(const boost::system::error_code& error,
+                       std::size_t bytes_transferred);
   // work
   void compile();
   void send_object_file();
@@ -163,14 +164,14 @@ void Session::get_fileContent(const boost::system::error_code &error,
 
   if (error == boost::asio::error::eof) {
     report("> get_fileContent: done");
-    inFile_.write(fileChunk_, bytes_transferred);
+    inFile_.write(static_cast<char *>(fileChunk_), bytes_transferred);
     inFile_.close();
   } else if (error) {
     report("> get_fileContent: error");
     inFile_.close();
     throw boost::system::system_error(error);
   } else {
-    inFile_.write(fileChunk_, bytes_transferred);
+    inFile_.write(static_cast<char *>(fileChunk_), bytes_transferred);
     memset(fileChunk_, 0, bytes_transferred);
     auto lifetime_mngr = shared_from_this();
     peer_.async_read_some(

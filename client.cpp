@@ -24,7 +24,6 @@ int main() {
 
     tcp::socket socket(io_service);
     socket.connect(*endpoint);
-    char acknowledge[3];
 
     // send command
     std::string cmd = "gcc -c data.cpp -o data.exe -I./sent/include";

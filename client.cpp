@@ -1,4 +1,3 @@
-#include <boost/array.hpp>
 #include <boost/asio.hpp>
 #include <fstream>
 #include <iostream>
@@ -8,9 +7,7 @@ using boost::asio::ip::tcp;
 
 // protocol:
 // send : command
-// get: acknowledge
 // send : filename
-// get: acknowledge
 // send : file content
 
 int main() {
@@ -37,7 +34,6 @@ int main() {
         socket, boost::asio::buffer(cmd.c_str(), request_length));
     cmd.pop_back();
     std::cout << "> Sent cmd: '" << cmd << "' " << std::endl;
-    boost::asio::read(socket, boost::asio::buffer(acknowledge, 3));
 
     // open file
     std::string fileName = "test/to_send/data.cpp";
@@ -56,7 +52,6 @@ int main() {
     fileName.pop_back();
 
     std::cout << "> Sent filename: '" << fileName << "' " << std::endl;
-    boost::asio::read(socket, boost::asio::buffer(acknowledge, 3));
 
     // send file content
 

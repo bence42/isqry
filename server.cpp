@@ -1,125 +1,128 @@
-#include <boost/array.hpp>
 #include <boost/asio.hpp>
 #include <exception>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <string>
 
 namespace fs = std::filesystem;
 using boost::asio::ip::tcp;
 
-static void print_time_from(
-    const std::chrono::time_point<std::chrono::system_clock> &start_time) {
-  auto end_time = std::chrono::high_resolution_clock::now();
-  std::cout << "> job took: "
-            << std::chrono::duration_cast<std::chrono::milliseconds>(end_time -
-                                                                     start_time)
-                   .count()
-            << " ms" << std::endl;
-}
-
-class Session {
+class Session : public std::enable_shared_from_this<Session> {
 public:
-  Session(tcp::socket peer)
+  explicit Session(tcp::socket&& peer)
       : peer_(std::move(peer)), port_(peer_.remote_endpoint().port()),
-        address_(peer_.remote_endpoint().address()) {}
+        address_(peer_.remote_endpoint().address()),
+        start_time_(std::chrono::high_resolution_clock::now()) {
+    report("> connected to :", address_, ":", port_);
+  }
+
+  Session(const Session&) = delete;
+  Session(const Session&&) = delete;
+
+  ~Session() { report_end(); }
+
   void start();
 
 private:
+  //utils
+  template <typename... Args> inline void report(Args &&... args);
+  void
+  print_time_from(const std::chrono::time_point<std::chrono::system_clock> &);
   // init
   void get_command();
-  void get_files();
-  void get_filename();
+  void get_filename(const boost::system::error_code &);
   std::string create_inFile_path();
-  void get_fileContent(std::ofstream &&inFile);
+  void prepare_file(const boost::system::error_code &);
+  void get_fileContent(const boost::system::error_code &, std::size_t);
   // work
   void compile();
   void send_object_file();
   // end
   void detect_end_of_build();
   void clean_up();
+  void report_end();
 
   tcp::socket peer_;
-  int port_;
-  boost::asio::ip::address address_;
+  const int port_;
+  const boost::asio::ip::address address_;
+
   std::string cmd_;
   std::string inFileName_;
   std::string inFilePath_;
+  std::ofstream inFile_;
 
-  std::chrono::time_point<std::chrono::system_clock> start_time_ =
-      std::chrono::high_resolution_clock::now();
+  static constexpr int max_buff_length = 65536;
+  char fileChunk_[max_buff_length]{};
+  boost::asio::streambuf sbuff_;
+
+  const std::chrono::time_point<std::chrono::system_clock> start_time_;
   const std::string receiveFolder_ = "d:/GIT/isqry/test/received/";
 };
 
 void Session::start() {
   // protocol:
   // get : command
-  // send: acknowledge
   // get : filename
-  // send: acknowledge
   // get : file content
   try {
-    std::cout << "connected to :" << address_ << ":" << port_ << std::endl;
     get_command();
-    get_files();
-    print_time_from(start_time_);
-  } catch (std::exception &e) {
-    std::cerr << "> Session exception: " << e.what() << std::endl;
-  }
 
-  std::cout << "disconnected: " << peer_.remote_endpoint().address() << ":"
-            << peer_.remote_endpoint().port() << std::endl;
+  } catch (std::exception &e) {
+    report("> Session init exception : ", e.what());
+  }
+}
+
+template <typename... Args> inline void Session::report(Args &&... args) {
+  (std::cout << ... << args);
+  std::cout << "\n";
+}
+
+void Session::print_time_from(
+    const std::chrono::time_point<std::chrono::system_clock> &start_time) {
+  auto end_time = std::chrono::high_resolution_clock::now();
+  report("> job took: ",
+         std::chrono::duration_cast<std::chrono::milliseconds>(end_time -
+                                                               start_time)
+             .count(),
+         " ms");
 }
 
 void Session::get_command() {
-  char buff[32656];
-  int bytes_read = 0;
-  boost::system::error_code ec;
-
-  for (;;) {
-    bytes_read += peer_.read_some(boost::asio::buffer(buff), ec);
-    if (ec) {
-      throw boost::system::system_error(ec);
-    }
-    cmd_ += std::string(buff, bytes_read);
-    if (cmd_.find("\n") != std::string::npos) {
-      cmd_.pop_back();
-      std::cout << "> Got cmd: " << cmd_ << std::endl;
-      break;
-    }
-  }
-  peer_.wait(boost::asio::socket_base::wait_write);
-  peer_.write_some(boost::asio::buffer("OK"), ec);
+  auto lifetime_mngr = shared_from_this();
+  boost::asio::async_read_until(
+      peer_, sbuff_, "\n",
+      [this, lifetime_mngr](const boost::system::error_code err,
+                            std::size_t bytes_transferred) {
+        cmd_ = std::string{buffers_begin(sbuff_.data()),
+                           buffers_begin(sbuff_.data()) + bytes_transferred -
+                               std::string{"\n"}.size()};
+        sbuff_.consume(bytes_transferred);
+        report("> got cmd : '", cmd_, "'");
+        get_filename(err);
+      });
 }
 
-void Session::get_files() {
-  std::vector<std::string> fileList(64);
+void Session::get_filename(const boost::system::error_code &error) {
 
-  get_filename();
-  get_fileContent(std::ofstream{create_inFile_path()});
-}
-
-void Session::get_filename() {
-  boost::system::error_code ec;
-  int bytes_read = 0;
-
-  for (;;) {
-    char buff[32656];
-    bytes_read = peer_.read_some(boost::asio::buffer(buff), ec);
-    inFileName_ += std::string(buff, bytes_read);
-
-    if (inFileName_.back() == '\n') {
-      inFileName_.pop_back();
-      std::cout << "> Got fileName: " << inFileName_ << std::endl;
-      break;
-    } else if (ec) {
-      std::cout << "get_filename: error";
-      throw boost::system::system_error(ec);
-    }
+  if (!error) {
+    auto lifetime_mngr = shared_from_this();
+    boost::asio::async_read_until(
+        peer_, sbuff_, "\n",
+        [this, lifetime_mngr](const boost::system::error_code err,
+                              std::size_t bytes_transferred) {
+          inFileName_ =
+              std::string{buffers_begin(sbuff_.data()),
+                          buffers_begin(sbuff_.data()) + bytes_transferred -
+                              std::string{"\n"}.size()};
+          sbuff_.consume(bytes_transferred);
+          report("> got inFileName : '", inFileName_, "'");
+          prepare_file(err);
+        });
+  } else {
+    throw boost::system::system_error(error);
   }
-  peer_.wait(boost::asio::socket_base::wait_write);
-  peer_.write_some(boost::asio::buffer("OK"), ec);
 }
 
 std::string Session::create_inFile_path() {
@@ -127,45 +130,73 @@ std::string Session::create_inFile_path() {
   auto ifpp = ifp.parent_path();
   fs::create_directories(ifpp);
 
-  std::cout << "> Create inFilePath: " << ifp.string() << std::endl;
-  return ifp.string();
+  inFilePath_ = ifp.string();
+  report("> Create inFilePath : '", inFilePath_, "'");
+  return inFilePath_;
 }
 
-void Session::get_fileContent(std::ofstream &&inFile) {
-  int bytes_read = 0;
-  boost::system::error_code ec;
-  if (!inFile.is_open()) {
-    throw std::runtime_error("get_fileContent: cannot open file " +
-                             inFilePath_);
-  }
-  for (;;) {
-    char buff[65536]{};
-    bytes_read = peer_.read_some(boost::asio::buffer(buff), ec);
+void Session::prepare_file(const boost::system::error_code &error) {
 
-    if (ec == boost::asio::error::eof) {
-      inFile.write(buff, bytes_read);
-      inFile.close();
-      break; // read all data
-    } else if (ec) {
-      std::cout << "get_fileContent: error";
-      inFile.close();
-      throw boost::system::system_error(ec);
-    } else {
-      inFile.write(buff, bytes_read);
+  if (!error) {
+    inFile_.open(create_inFile_path());
+    if (inFile_.fail()) {
+      report("> prepare_file open failure : ", strerror(errno));
+      report("prepare_file tired to open :", inFilePath_);
     }
+    if (!inFile_.is_open()) {
+      throw std::runtime_error("prepare_file cannot open file :" + inFilePath_);
+    }
+    auto lifetime_mngr = shared_from_this();
+    peer_.async_read_some(
+        boost::asio::buffer(fileChunk_),
+        [this, lifetime_mngr](const boost::system::error_code err,
+                              std::size_t bytes_transferred) {
+          get_fileContent(err, bytes_transferred);
+        });
+  } else {
+    throw boost::system::system_error(error);
   }
+}
+
+void Session::get_fileContent(const boost::system::error_code &error,
+                              std::size_t bytes_transferred) {
+
+  if (error == boost::asio::error::eof) {
+    report("> get_fileContent: done");
+    inFile_.write(fileChunk_, bytes_transferred);
+    inFile_.close();
+  } else if (error) {
+    report("> get_fileContent: error");
+    inFile_.close();
+    throw boost::system::system_error(error);
+  } else {
+    inFile_.write(fileChunk_, bytes_transferred);
+    memset(fileChunk_, 0, bytes_transferred);
+    auto lifetime_mngr = shared_from_this();
+    peer_.async_read_some(
+        boost::asio::buffer(fileChunk_),
+        [this, lifetime_mngr](const boost::system::error_code err,
+                              std::size_t bytes_transferred) {
+          get_fileContent(err, bytes_transferred);
+        });
+  }
+}
+
+void Session::report_end() {
+  report("> disconnected :", peer_.remote_endpoint().address(), ":",
+         peer_.remote_endpoint().port());
+  print_time_from(start_time_);
 }
 
 class Server {
 public:
-  Server(boost::asio::io_context &io, short port)
+  Server(boost::asio::io_context &io, int16_t port)
       : acceptor_(io, tcp::endpoint(tcp::v4(), port)) {
     do_accept();
   }
 
 private:
   void do_accept() {
-    std::cout << "waiting.." << std::endl;
     acceptor_.async_accept(
         [this](boost::system::error_code ec, tcp::socket socket) {
           if (!ec) {
@@ -186,7 +217,7 @@ int main() {
     Server s(io, port);
     io.run();
   } catch (std::exception &e) {
-    std::cerr << "> Server exception: " << e.what() << std::endl;
+    std::cout << "> Server exception : " << e.what() << std::endl;
   }
   return 0;
 }

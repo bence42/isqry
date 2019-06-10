@@ -36,6 +36,11 @@ int main() {
     // open file
     std::string fileName = "test/to_send/data.cpp";
     std::ifstream file(fileName, std::ios_base::in);
+    if (file.bad()) {
+      std::cerr << "> error: failure opening: " << fileName  << " " << strerror(errno) << std::endl;
+      socket.close();
+      exit(1);
+    }
     if (!file.is_open()) {
       std::cerr << "> error: cant open file: " << fileName << std::endl;
       socket.close();

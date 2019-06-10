@@ -12,9 +12,8 @@ using boost::asio::ip::tcp;
 
 int main() {
   try {
-
-    const char *port = "3632";
-    const char *server = "192.168.1.107";
+    const char* port = "3632";
+    const char* server = "192.168.1.107";
 
     boost::asio::io_service io_service;
     tcp::resolver resolver(io_service);
@@ -64,7 +63,7 @@ int main() {
           boost::asio::write(socket, boost::asio::buffer(buff, request_length));
     }
     file.close();
-  } catch (std::exception &e) {
+  } catch (std::exception& e) {
     std::cout << "Exception: " << e.what() << std::endl;
   }
 

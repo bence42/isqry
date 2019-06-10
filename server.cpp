@@ -10,31 +10,38 @@ namespace fs = std::filesystem;
 using boost::asio::ip::tcp;
 
 class Session : public std::enable_shared_from_this<Session> {
-public:
-  explicit Session(tcp::socket &&peer)
-      : peer_(std::move(peer)), port_(peer_.remote_endpoint().port()),
+ public:
+  explicit Session(tcp::socket&& peer)
+      : peer_(std::move(peer)),
+        port_(peer_.remote_endpoint().port()),
         address_(peer_.remote_endpoint().address()),
         start_time_(std::chrono::high_resolution_clock::now()) {
     report("> connected to :", address_, ":", port_);
   }
 
-  Session(const Session &) = delete;
-  Session(const Session &&) = delete;
+  Session(const Session&) = delete;
+  Session(const Session&&) = delete;
 
-  ~Session() { report_end(); }
+  ~Session() {
+    report_end();
+    if (inFile_.is_open()){
+      inFile_.close();
+    }
+  }
 
   void start();
 
-private:
+ private:
   // utils
-  template <typename... Args> inline void report(Args &&... args);
+  template <typename... Args>
+  inline void report(Args&&... args);
   void print_time_from(
-      const std::chrono::time_point<std::chrono::system_clock> &start_time);
+      const std::chrono::time_point<std::chrono::system_clock>& start_time);
   // init
   void get_command();
-  void get_filename(const boost::system::error_code &error);
+  void get_filename(const boost::system::error_code& error);
   std::string create_inFile_path();
-  void prepare_file(const boost::system::error_code &error);
+  void prepare_file(const boost::system::error_code& error);
   void get_fileContent(const boost::system::error_code& error,
                        std::size_t bytes_transferred);
   // work
@@ -69,19 +76,19 @@ void Session::start() {
   // get : file content
   try {
     get_command();
-
-  } catch (std::exception &e) {
+  } catch (std::exception& e) {
     report("> Session init exception : ", e.what());
   }
 }
 
-template <typename... Args> inline void Session::report(Args &&... args) {
+template <typename... Args>
+inline void Session::report(Args&&... args) {
   (std::cout << ... << args);
   std::cout << "\n";
 }
 
 void Session::print_time_from(
-    const std::chrono::time_point<std::chrono::system_clock> &start_time) {
+    const std::chrono::time_point<std::chrono::system_clock>& start_time) {
   auto end_time = std::chrono::high_resolution_clock::now();
   report("> job took: ",
          std::chrono::duration_cast<std::chrono::milliseconds>(end_time -
@@ -105,8 +112,7 @@ void Session::get_command() {
       });
 }
 
-void Session::get_filename(const boost::system::error_code &error) {
-
+void Session::get_filename(const boost::system::error_code& error) {
   if (!error) {
     auto lifetime_mngr = shared_from_this();
     boost::asio::async_read_until(
@@ -136,13 +142,12 @@ std::string Session::create_inFile_path() {
   return inFilePath_;
 }
 
-void Session::prepare_file(const boost::system::error_code &error) {
-
+void Session::prepare_file(const boost::system::error_code& error) {
   if (!error) {
     inFile_.open(create_inFile_path());
     if (inFile_.fail()) {
       report("> prepare_file open failure : ", strerror(errno));
-      report("prepare_file tired to open :", inFilePath_);
+      report("> prepare_file tired to open :", inFilePath_);
     }
     if (!inFile_.is_open()) {
       throw std::runtime_error("prepare_file cannot open file :" + inFilePath_);
@@ -159,20 +164,17 @@ void Session::prepare_file(const boost::system::error_code &error) {
   }
 }
 
-void Session::get_fileContent(const boost::system::error_code &error,
+void Session::get_fileContent(const boost::system::error_code& error,
                               std::size_t bytes_transferred) {
-
   if (error == boost::asio::error::eof) {
     report("> get_fileContent: done");
-    inFile_.write(static_cast<char *>(fileChunk_), bytes_transferred);
-    inFile_.close();
+    inFile_.write(static_cast<char*>(fileChunk_), bytes_transferred);
   } else if (error) {
     report("> get_fileContent: error");
-    inFile_.close();
     throw boost::system::system_error(error);
   } else {
-    inFile_.write(static_cast<char *>(fileChunk_), bytes_transferred);
-    memset(fileChunk_, 0, bytes_transferred);
+    inFile_.write(static_cast<char*>(fileChunk_), bytes_transferred);
+    memset(static_cast<char*>(fileChunk_), 0, bytes_transferred);
     auto lifetime_mngr = shared_from_this();
     peer_.async_read_some(
         boost::asio::buffer(fileChunk_),
@@ -190,13 +192,13 @@ void Session::report_end() {
 }
 
 class Server {
-public:
-  Server(boost::asio::io_context &io, int16_t port)
+ public:
+  Server(boost::asio::io_context& io, int16_t port)
       : acceptor_(io, tcp::endpoint(tcp::v4(), port)) {
     do_accept();
   }
 
-private:
+ private:
   void do_accept() {
     acceptor_.async_accept(
         [this](boost::system::error_code ec, tcp::socket socket) {
@@ -217,7 +219,7 @@ int main() {
     boost::asio::io_context io;
     Server s(io, port);
     io.run();
-  } catch (std::exception &e) {
+  } catch (std::exception& e) {
     std::cout << "> Server exception : " << e.what() << std::endl;
   }
   return 0;

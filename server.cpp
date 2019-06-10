@@ -24,7 +24,7 @@ class Session : public std::enable_shared_from_this<Session> {
 
   ~Session() {
     report_end();
-    if (inFile_.is_open()){
+    if (inFile_.is_open()) {
       inFile_.close();
     }
   }
@@ -39,11 +39,10 @@ class Session : public std::enable_shared_from_this<Session> {
       const std::chrono::time_point<std::chrono::system_clock>& start_time);
   // init
   void get_command();
-  void get_filename(const boost::system::error_code& error);
+  void get_filename();
   std::string create_inFile_path();
-  void prepare_file(const boost::system::error_code& error);
-  void get_fileContent(const boost::system::error_code& error,
-                       std::size_t bytes_transferred);
+  void prepare_file();
+  void get_fileContent();
   // work
   void compile();
   void send_object_file();
@@ -77,7 +76,7 @@ void Session::start() {
   try {
     get_command();
   } catch (std::exception& e) {
-    report("> Session init exception : ", e.what());
+    report("> error: Session init exception : ", e.what());
   }
 }
 
@@ -101,35 +100,41 @@ void Session::get_command() {
   auto lifetime_mngr = shared_from_this();
   boost::asio::async_read_until(
       peer_, sbuff_, "\n",
-      [this, lifetime_mngr](const boost::system::error_code err,
+      [this, lifetime_mngr](const boost::system::error_code error,
                             std::size_t bytes_transferred) {
-        cmd_ = std::string{buffers_begin(sbuff_.data()),
-                           buffers_begin(sbuff_.data()) + bytes_transferred -
-                               std::string{"\n"}.size()};
-        sbuff_.consume(bytes_transferred);
-        report("> got cmd : '", cmd_, "'");
-        get_filename(err);
+        if (!error) {
+          cmd_ = std::string{buffers_begin(sbuff_.data()),
+                             buffers_begin(sbuff_.data()) + bytes_transferred -
+                                 std::string{"\n"}.size()};
+          sbuff_.consume(bytes_transferred);
+          report("> got cmd : '", cmd_, "'");
+          get_filename();
+        } else {
+          report("> error: get_command failed to receive cmd");
+          throw boost::system::system_error(error);
+        }
       });
 }
 
-void Session::get_filename(const boost::system::error_code& error) {
-  if (!error) {
-    auto lifetime_mngr = shared_from_this();
-    boost::asio::async_read_until(
-        peer_, sbuff_, "\n",
-        [this, lifetime_mngr](const boost::system::error_code err,
-                              std::size_t bytes_transferred) {
+void Session::get_filename() {
+  auto lifetime_mngr = shared_from_this();
+  boost::asio::async_read_until(
+      peer_, sbuff_, "\n",
+      [this, lifetime_mngr](const boost::system::error_code error,
+                            std::size_t bytes_transferred) {
+        if (!error) {
           inFileName_ =
               std::string{buffers_begin(sbuff_.data()),
                           buffers_begin(sbuff_.data()) + bytes_transferred -
                               std::string{"\n"}.size()};
           sbuff_.consume(bytes_transferred);
           report("> got inFileName : '", inFileName_, "'");
-          prepare_file(err);
-        });
-  } else {
-    throw boost::system::system_error(error);
-  }
+          prepare_file();
+        } else {
+          report("> error: get_filename failed to receive filename");
+          throw boost::system::system_error(error);
+        }
+      });
 }
 
 std::string Session::create_inFile_path() {
@@ -142,47 +147,37 @@ std::string Session::create_inFile_path() {
   return inFilePath_;
 }
 
-void Session::prepare_file(const boost::system::error_code& error) {
-  if (!error) {
-    inFile_.open(create_inFile_path());
-    if (inFile_.fail()) {
-      report("> prepare_file open failure : ", strerror(errno));
-      report("> prepare_file tired to open :", inFilePath_);
-    }
-    if (!inFile_.is_open()) {
-      throw std::runtime_error("prepare_file cannot open file :" + inFilePath_);
-    }
-    auto lifetime_mngr = shared_from_this();
-    peer_.async_read_some(
-        boost::asio::buffer(fileChunk_),
-        [this, lifetime_mngr](const boost::system::error_code err,
-                              std::size_t bytes_transferred) {
-          get_fileContent(err, bytes_transferred);
-        });
-  } else {
-    throw boost::system::system_error(error);
+void Session::prepare_file() {
+  inFile_.open(create_inFile_path());
+  if (inFile_.fail()) {
+    report("> error: prepare_file open failure : ", strerror(errno));
+    report("> note : prepare_file tired to open :", inFilePath_);
   }
+  if (!inFile_.is_open()) {
+    throw std::runtime_error("prepare_file cannot open file :" + inFilePath_);
+  }
+
+  get_fileContent();
 }
 
-void Session::get_fileContent(const boost::system::error_code& error,
-                              std::size_t bytes_transferred) {
-  if (error == boost::asio::error::eof) {
-    report("> get_fileContent: done");
-    inFile_.write(static_cast<char*>(fileChunk_), bytes_transferred);
-  } else if (error) {
-    report("> get_fileContent: error");
-    throw boost::system::system_error(error);
-  } else {
-    inFile_.write(static_cast<char*>(fileChunk_), bytes_transferred);
-    memset(static_cast<char*>(fileChunk_), 0, bytes_transferred);
-    auto lifetime_mngr = shared_from_this();
-    peer_.async_read_some(
-        boost::asio::buffer(fileChunk_),
-        [this, lifetime_mngr](const boost::system::error_code err,
-                              std::size_t bytes_transferred) {
-          get_fileContent(err, bytes_transferred);
-        });
-  }
+void Session::get_fileContent() {
+  auto lifetime_mngr = shared_from_this();
+  peer_.async_read_some(
+      boost::asio::buffer(fileChunk_),
+      [this, lifetime_mngr](const boost::system::error_code error,
+                            std::size_t bytes_transferred) {
+        if (error == boost::asio::error::eof) {
+          report("> get_fileContent: done");
+          inFile_.write(static_cast<char*>(fileChunk_), bytes_transferred);
+        } else if (error) {
+          report("> error: get_fileContent: error during receiving file");
+          throw boost::system::system_error(error);
+        } else {
+          inFile_.write(static_cast<char*>(fileChunk_), bytes_transferred);
+          memset(static_cast<char*>(fileChunk_), 0, bytes_transferred);
+          get_fileContent();
+        }
+      });
 }
 
 void Session::report_end() {
@@ -220,7 +215,7 @@ int main() {
     Server s(io, port);
     io.run();
   } catch (std::exception& e) {
-    std::cout << "> Server exception : " << e.what() << std::endl;
+    std::cout << "> error: Server exception : " << e.what() << std::endl;
   }
   return 0;
 }

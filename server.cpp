@@ -198,6 +198,8 @@ class Server {
     acceptor_.async_accept(
         [this](const boost::system::error_code& ec, tcp::socket socket) {
           if (!ec) {
+            // the correct Session lifetime in case of async operations is
+            // within Session ensured by shared_from_this.
             std::make_shared<Session>(std::move(socket))->start();
           }
 
